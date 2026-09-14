@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://semplast.netlify.app/sitemap.xml

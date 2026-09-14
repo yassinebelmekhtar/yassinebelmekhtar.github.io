@@ -1,0 +1,6 @@
+/index.html / 301
+/about /about.html 200
+/contact /contact.html 200
+/legal /legal.html 200
+/products /products.html 200
+/products/:id /products/:id.html 200
