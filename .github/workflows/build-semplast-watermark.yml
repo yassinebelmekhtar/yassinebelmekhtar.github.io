@@ -1,0 +1,87 @@
+name: Build SEHIMPLAST watermarked site
+
+on:
+  push:
+    branches:
+      - semplast-watermark
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+
+      - name: Install image tools
+        run: sudo apt-get update && sudo apt-get install -y imagemagick wget zip
+
+      - name: Download the public website
+        run: |
+          rm -rf semplast-site .site-download
+          mkdir -p semplast-site
+          wget --mirror --page-requisites --convert-links --adjust-extension \
+            --no-parent --execute robots=off \
+            https://semplast.netlify.app/ -P .site-download
+          cp -a .site-download/semplast.netlify.app/. semplast-site/
+          test -f semplast-site/index.html
+          test -f semplast-site/catalog/model-01.webp
+          curl -fL https://semplast.netlify.app/semplast-logo.jpeg -o new-logo.jpeg
+
+      - name: Replace product watermarks
+        shell: bash
+        run: |
+          set -euo pipefail
+          convert new-logo.jpeg -trim +repage -strip logo-trimmed.png
+          convert new-logo.jpeg -strip -resize 576x408! -quality 88 semplast-site/semplast-logo.jpeg
+
+          mapfile -t images < <(
+            find semplast-site/catalog -maxdepth 1 -type f \( -iname 'model-*.webp' -o -iname 'model-*.png' -o -iname 'model-*.jpg' -o -iname 'model-*.jpeg' \) -print
+            find semplast-site/products -maxdepth 1 -type f \( -iname '*.webp' -o -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \) -print
+          )
+
+          count=0
+          for img in "${images[@]}"; do
+            width=$(identify -format '%w' "$img")
+            mark_width=$(( width * 24 / 100 ))
+            pad=$(( width * 12 / 1000 ))
+            margin=$(( width * 24 / 1000 ))
+            [ "$pad" -lt 8 ] && pad=8
+            [ "$margin" -lt 14 ] && margin=14
+            ext="${img##*.}"
+            tmp="${img%.*}.watermarked.${ext}"
+
+            convert "$img" \
+              \( logo-trimmed.png -resize "${mark_width}x" -bordercolor white -border "$pad" \) \
+              -gravity southeast -geometry "+${margin}+${margin}" -composite \
+              -strip -quality 88 "$tmp"
+            mv "$tmp" "$img"
+            count=$((count + 1))
+          done
+
+          echo "Updated $count product images"
+          test "$count" -ge 20
+
+      - name: Create preview and Netlify ZIP
+        run: |
+          montage semplast-site/catalog/model-* \
+            -thumbnail 180x180 -tile 5x4 -geometry +8+8 \
+            -background '#eef3f4' -quality 82 watermark-preview.jpg
+          (
+            cd semplast-site
+            zip -qr ../sehimplast-netlify-watermark.zip .
+          )
+          unzip -tq sehimplast-netlify-watermark.zip
+          test "$(unzip -Z1 sehimplast-netlify-watermark.zip | head -n 1)" != "semplast-site/"
+
+      - name: Save generated files on the branch
+        run: |
+          git config user.name "SEHIMPLAST Site Builder"
+          git config user.email "actions@users.noreply.github.com"
+          git add semplast-site watermark-preview.jpg sehimplast-netlify-watermark.zip
+          git commit -m "Add SEHIMPLAST watermark to all product images"
+          git push origin semplast-watermark
