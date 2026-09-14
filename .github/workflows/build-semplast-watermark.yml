@@ -32,6 +32,8 @@ jobs:
           test -f semplast-site/catalog/model-01.webp
           test -f semplast-assets/sehimplast-logo-watermark.png
           cp semplast-assets/sehimplast-logo-watermark.png new-logo.png
+          test -f semplast-assets/model-08-replacement.png
+          cp semplast-assets/model-08-replacement.png semplast-site/catalog/model-08.png
 
       - name: Apply SEHIMPLAST identity
         shell: bash
@@ -39,8 +41,19 @@ jobs:
           set -euo pipefail
           find semplast-site -type f -name '*.html' -print0 | xargs -0 sed -i \
             -e 's/SEMPLAST SARL AU/SEHIMPLAST SARL AU/g' \
+            -e 's#https://www.google.com/maps/search/?api=1&amp;query=5+Boulevard+Abdellah+Ben+Yassine+Casablanca#https://share.google/rnWDULLRXrN5Y6Ynk#g' \
+            -e 's#https://www.google.com/maps/search/?api=1\\u0026query=5+Boulevard+Abdellah+Ben+Yassine+Casablanca#https://share.google/rnWDULLRXrN5Y6Ynk#g' \
             -e 's/SEMPLAST/SEHIMPLAST/g' \
-            -e 's/Semplast/Sehimplast/g'
+            -e 's/Semplast/Sehimplast/g' \
+            -e 's/5 Boulevard Abdellah Ben Yassine/العسل العالية 2/g' \
+            -e 's/Immeuble Bellaon, 5e étage/حد السوالم/g' \
+            -e 's/5 Bd Abdellah Ben Yassine/العسل العالية 2/g' \
+            -e 's/Imm Bellaon, 5e étage/حد السوالم/g' \
+            -e 's/CASABLANCA/حد السوالم/g' \
+            -e 's/Casablanca/حد السوالم/g' \
+            -e 's/SEHIMPLAST — Accueil/SEHIMPLAST SARL AU — Accueil/g' \
+            -e 's/<b class="foot-logo">SEHIMPLAST<\/b>/<b class="foot-logo">SEHIMPLAST SARL AU<\/b>/g' \
+            -e 's/© 2026 SEHIMPLAST\./© 2026 SEHIMPLAST SARL AU./g'
           printf '%s\n' 'Company identity updated in all HTML pages'
 
       - name: Replace product watermarks
@@ -57,11 +70,8 @@ jobs:
             find semplast-site/products -maxdepth 1 -type f \( -iname '*.webp' -o -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \) -print
           )
 
-          # The live source contains one truncated PNG; Pillow can safely recover its readable pixels.
-          python3 -c 'from PIL import Image, ImageFile; from pathlib import Path; import os, sys; ImageFile.LOAD_TRUNCATED_IMAGES=True; p=Path(sys.argv[1]); im=Image.open(p); im.load(); t=p.with_name(p.stem+".repaired"+p.suffix); im.save(t, format="PNG"); im.close(); os.replace(t, p)' semplast-site/catalog/model-08.png
-
           count=0
-          repaired=1
+          repaired=0
           for img in "${images[@]}"; do
             if ! identify "$img" >/dev/null 2>&1; then
               python3 -c 'from PIL import Image, ImageFile; from pathlib import Path; import os, sys; ImageFile.LOAD_TRUNCATED_IMAGES=True; p=Path(sys.argv[1]); im=Image.open(p); fmt=im.format or p.suffix.lstrip(".").upper(); im.load(); im=im.convert("RGB") if fmt=="JPEG" else im; t=p.with_name(p.stem+".repaired"+p.suffix); im.save(t, format=fmt); im.close(); os.replace(t, p)' "$img"
