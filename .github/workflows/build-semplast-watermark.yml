@@ -39,22 +39,31 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          find semplast-site -type f -name '*.html' -print0 | xargs -0 sed -i \
+          find semplast-site -type f \( -name '*.html' -o -name '*.js' \) -print0 | xargs -0 sed -i \
             -e 's/SEMPLAST SARL AU/SEHIMPLAST SARL AU/g' \
             -e 's#https://www.google.com/maps/search/?api=1&amp;query=5+Boulevard+Abdellah+Ben+Yassine+Casablanca#https://share.google/rnWDULLRXrN5Y6Ynk#g' \
             -e 's#https://www.google.com/maps/search/?api=1\\u0026query=5+Boulevard+Abdellah+Ben+Yassine+Casablanca#https://share.google/rnWDULLRXrN5Y6Ynk#g' \
-            -e 's/SEMPLAST/SEHIMPLAST/g' \
-            -e 's/Semplast/Sehimplast/g' \
+            -e 's/Emballages pour huiles · Casablanca/Emballages pour huiles · Had Soualem/g' \
+            -e 's/RETROUVEZ-NOUS À CASABLANCA/RETROUVEZ-NOUS À HAD SOUALEM/g' \
+            -e 's/depuis Casablanca/depuis Had Soualem/g' \
+            -e 's/Casablanca, Maroc/المغرب/g' \
             -e 's/5 Boulevard Abdellah Ben Yassine/العسل العالية 2/g' \
             -e 's/Immeuble Bellaon, 5e étage/حد السوالم/g' \
             -e 's/5 Bd Abdellah Ben Yassine/العسل العالية 2/g' \
             -e 's/Imm Bellaon, 5e étage/حد السوالم/g' \
-            -e 's/CASABLANCA/حد السوالم/g' \
-            -e 's/Casablanca/حد السوالم/g' \
+            -e 's/SEMPLAST/SEHIMPLAST/g' \
+            -e 's/Semplast/Sehimplast/g' \
+            -e 's/CASABLANCA/HAD SOUALEM/g' \
+            -e 's/Casablanca/Had Soualem/g' \
+            -e 's/SEHIMPLAST · Had Soualem, MAROC/SEHIMPLAST SARL AU · HAD SOUALEM, MAROC/g' \
             -e 's/SEHIMPLAST — Accueil/SEHIMPLAST SARL AU — Accueil/g' \
             -e 's/<b class="foot-logo">SEHIMPLAST<\/b>/<b class="foot-logo">SEHIMPLAST SARL AU<\/b>/g' \
             -e 's/© 2026 SEHIMPLAST\./© 2026 SEHIMPLAST SARL AU./g'
-          printf '%s\n' 'Company identity updated in all HTML pages'
+
+          css_file=$(find semplast-site/_next/static/css -type f -name 'index.*.css' | head -n 1)
+          test -n "$css_file"
+          printf '\n%s\n' '.foot-logo{display:block;width:190px;height:72px;background:#fff url("/semplast-logo.jpeg") center/contain no-repeat;border-radius:10px;font-size:0!important;line-height:0}' >> "$css_file"
+          printf '%s\n' 'Company identity updated in HTML, runtime JS, header, intro, and footer'
 
       - name: Replace product watermarks
         shell: bash
