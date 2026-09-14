@@ -57,8 +57,11 @@ jobs:
             find semplast-site/products -maxdepth 1 -type f \( -iname '*.webp' -o -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \) -print
           )
 
+          # The live source contains one truncated PNG; Pillow can safely recover its readable pixels.
+          python3 -c 'from PIL import Image, ImageFile; from pathlib import Path; import os, sys; ImageFile.LOAD_TRUNCATED_IMAGES=True; p=Path(sys.argv[1]); im=Image.open(p); im.load(); t=p.with_name(p.stem+".repaired"+p.suffix); im.save(t, format="PNG"); im.close(); os.replace(t, p)' semplast-site/catalog/model-08.png
+
           count=0
-          repaired=0
+          repaired=1
           for img in "${images[@]}"; do
             if ! identify "$img" >/dev/null 2>&1; then
               python3 -c 'from PIL import Image, ImageFile; from pathlib import Path; import os, sys; ImageFile.LOAD_TRUNCATED_IMAGES=True; p=Path(sys.argv[1]); im=Image.open(p); fmt=im.format or p.suffix.lstrip(".").upper(); im.load(); im=im.convert("RGB") if fmt=="JPEG" else im; t=p.with_name(p.stem+".repaired"+p.suffix); im.save(t, format=fmt); im.close(); os.replace(t, p)' "$img"
