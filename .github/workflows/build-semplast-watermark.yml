@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install image tools
-        run: sudo apt-get update && sudo apt-get install -y imagemagick wget zip
+        run: sudo apt-get update && sudo apt-get install -y imagemagick wget zip python3-pil
 
       - name: Download the public website
         run: |
@@ -30,14 +30,27 @@ jobs:
           cp -a .site-download/semplast.netlify.app/. semplast-site/
           test -f semplast-site/index.html
           test -f semplast-site/catalog/model-01.webp
-          curl -fL https://semplast.netlify.app/semplast-logo.jpeg -o new-logo.jpeg
+          test -f semplast-assets/sehimplast-logo-watermark.png
+          cp semplast-assets/sehimplast-logo-watermark.png new-logo.png
+
+      - name: Apply SEHIMPLAST identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          find semplast-site -type f -name '*.html' -print0 | xargs -0 sed -i \
+            -e 's/SEMPLAST SARL AU/SEHIMPLAST SARL AU/g' \
+            -e 's/SEMPLAST/SEHIMPLAST/g' \
+            -e 's/Semplast/Sehimplast/g'
+          printf '%s\n' 'Company identity updated in all HTML pages'
 
       - name: Replace product watermarks
         shell: bash
         run: |
           set -euo pipefail
-          convert new-logo.jpeg -trim +repage -strip logo-trimmed.png
-          convert new-logo.jpeg -strip -resize 576x408! -quality 88 semplast-site/semplast-logo.jpeg
+          convert new-logo.png -trim +repage -strip logo-trimmed.png
+          convert new-logo.png -background white -alpha remove -alpha off \
+            -resize 540x372 -gravity center -extent 576x408 \
+            -strip -quality 90 semplast-site/semplast-logo.jpeg
 
           mapfile -t images < <(
             find semplast-site/catalog -maxdepth 1 -type f \( -iname 'model-*.webp' -o -iname 'model-*.png' -o -iname 'model-*.jpg' -o -iname 'model-*.jpeg' \) -print
@@ -45,7 +58,30 @@ jobs:
           )
 
           count=0
+          repaired=0
           for img in "${images[@]}"; do
+            if ! identify "$img" >/dev/null 2>&1; then
+              python3 - "$img" <<'PY'
+from pathlib import Path
+from PIL import Image, ImageFile
+import os
+import sys
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True
+path = Path(sys.argv[1])
+with Image.open(path) as source:
+    fmt = source.format or path.suffix.lstrip('.').upper()
+    source.load()
+    if fmt == 'JPEG':
+        source = source.convert('RGB')
+    temp = path.with_name(path.stem + '.repaired' + path.suffix)
+    source.save(temp, format=fmt)
+os.replace(temp, path)
+PY
+              repaired=$((repaired + 1))
+            fi
+
+            identify "$img" >/dev/null
             width=$(identify -format '%w' "$img")
             mark_width=$(( width * 24 / 100 ))
             pad=$(( width * 12 / 1000 ))
@@ -63,7 +99,7 @@ jobs:
             count=$((count + 1))
           done
 
-          echo "Updated $count product images"
+          echo "Updated $count product images; repaired $repaired source images"
           test "$count" -ge 20
 
       - name: Create preview and Netlify ZIP
