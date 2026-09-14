@@ -61,23 +61,7 @@ jobs:
           repaired=0
           for img in "${images[@]}"; do
             if ! identify "$img" >/dev/null 2>&1; then
-              python3 - "$img" <<'PY'
-from pathlib import Path
-from PIL import Image, ImageFile
-import os
-import sys
-
-ImageFile.LOAD_TRUNCATED_IMAGES = True
-path = Path(sys.argv[1])
-with Image.open(path) as source:
-    fmt = source.format or path.suffix.lstrip('.').upper()
-    source.load()
-    if fmt == 'JPEG':
-        source = source.convert('RGB')
-    temp = path.with_name(path.stem + '.repaired' + path.suffix)
-    source.save(temp, format=fmt)
-os.replace(temp, path)
-PY
+              python3 -c 'from PIL import Image, ImageFile; from pathlib import Path; import os, sys; ImageFile.LOAD_TRUNCATED_IMAGES=True; p=Path(sys.argv[1]); im=Image.open(p); fmt=im.format or p.suffix.lstrip(".").upper(); im.load(); im=im.convert("RGB") if fmt=="JPEG" else im; t=p.with_name(p.stem+".repaired"+p.suffix); im.save(t, format=fmt); im.close(); os.replace(t, p)' "$img"
               repaired=$((repaired + 1))
             fi
 
