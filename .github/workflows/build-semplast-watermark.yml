@@ -120,10 +120,19 @@ jobs:
           unzip -tq sehimplast-netlify-watermark.zip
           test "$(unzip -Z1 sehimplast-netlify-watermark.zip | head -n 1)" != "semplast-site/"
 
+          rm -rf semplast-preview
+          cp -a semplast-site semplast-preview
+          preview_base='https://raw.githack.com/yassinebelmekhtar/yassinebelmekhtar.github.io/semplast-watermark/semplast-preview/'
+          find semplast-preview -type f \( -name '*.html' -o -name '*.js' -o -name '*.css' \) -print0 | xargs -0 sed -i \
+            -e "s#\"/#\"$preview_base#g" \
+            -e "s#'/#'$preview_base#g" \
+            -e "s#\`/#\`$preview_base#g"
+          test -f semplast-preview/index.html
+
       - name: Save generated files on the branch
         run: |
           git config user.name "SEHIMPLAST Site Builder"
           git config user.email "actions@users.noreply.github.com"
-          git add semplast-site watermark-preview.jpg sehimplast-netlify-watermark.zip
+          git add semplast-site semplast-preview watermark-preview.jpg sehimplast-netlify-watermark.zip
           git commit -m "Add SEHIMPLAST watermark to all product images"
           git push origin semplast-watermark
