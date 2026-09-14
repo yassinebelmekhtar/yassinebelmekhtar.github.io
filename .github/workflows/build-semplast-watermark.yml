@@ -62,8 +62,27 @@ jobs:
 
           css_file=$(find semplast-site/_next/static/css -type f -name 'index.*.css' | head -n 1)
           test -n "$css_file"
-          printf '\n%s\n' '.foot-logo{display:block;width:190px;height:72px;background:#fff url("/semplast-logo.jpeg") center/contain no-repeat;border-radius:10px;font-size:0!important;line-height:0}' >> "$css_file"
-          printf '%s\n' 'Company identity updated in HTML, runtime JS, header, intro, and footer'
+          printf '\n%s\n' '.foot-logo{display:block;width:190px;height:auto;max-height:72px;object-fit:contain;background:#fff;border-radius:10px}.intro-logo-shell img,.brand img{object-fit:contain}@media(max-width:640px){.foot-logo{width:150px;max-height:60px}}' >> "$css_file"
+
+          find semplast-site -maxdepth 1 -type f -name '*.html' -print0 | xargs -0 sed -i \
+            's#<b class="foot-logo">SEHIMPLAST SARL AU<\/b>#<img class="foot-logo" src="semplast-logo.jpeg" alt="SEHIMPLAST SARL AU"/>#g'
+          find semplast-site/products -maxdepth 1 -type f -name '*.html' -print0 | xargs -0 sed -i \
+            's#<b class="foot-logo">SEHIMPLAST SARL AU<\/b>#<img class="foot-logo" src="../semplast-logo.jpeg" alt="SEHIMPLAST SARL AU"/>#g'
+
+          chrome_js=$(find semplast-site/_next/static/chunks -type f -name 'site-chrome-*.js' | head -n 1)
+          intro_js=$(find semplast-site/_next/static/chunks -type f -name 'intro-splash-*.js' | head -n 1)
+          test -n "$chrome_js"
+          test -n "$intro_js"
+          sed -i 's#(0,d.jsx)(`b`,{className:`foot-logo`,children:`SEHIMPLAST`})#(0,d.jsx)(`img`,{className:`foot-logo`,src:`/semplast-logo.jpeg`,alt:`SEHIMPLAST SARL AU`})#g' "$chrome_js"
+          sed -i \
+            -e 's/Bienvenue chez SEHIMPLAST/Bienvenue chez SEHIMPLAST SARL AU/g' \
+            -e 's/Logo SEHIMPLAST/Logo SEHIMPLAST SARL AU/g' "$intro_js"
+
+          find semplast-site -type f -name '*.html' -print0 | xargs -0 sed -i -E \
+            -e 's#<meta name="codex-preview" content="development"/>##g' \
+            -e 's#<script async src="[^"]*\.netlify/scripts/hud(%3F|\?)[^"]*"[^>]*></script>##g'
+          rm -rf semplast-site/.netlify
+          printf '%s\n' 'Company identity updated; development-only scripts removed'
 
       - name: Replace product watermarks
         shell: bash
@@ -107,6 +126,31 @@ jobs:
 
           echo "Updated $count product images; repaired $repaired source images"
           test "$count" -ge 20
+
+      - name: Validate every page, image, and internal link
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(find semplast-site -type f -name '*.html' | wc -l)" -eq 25
+          test "$(find semplast-site/catalog -maxdepth 1 -type f -name 'model-*' | wc -l)" -eq 20
+          grep -R -q 'SEHIMPLAST SARL AU' semplast-site
+          grep -R -q 'العسل العالية 2' semplast-site
+          grep -R -q 'https://share.google/rnWDULLRXrN5Y6Ynk' semplast-site
+          ! grep -R -E -q 'Casablanca|Abdellah Ben Yassine|Bellaon' semplast-site
+          ! grep -R -q '.netlify/scripts/hud' semplast-site
+          ! grep -R -q 'name="codex-preview"' semplast-site
+          find semplast-site/catalog -maxdepth 1 -type f -name 'model-*' -print0 | xargs -0 -n 1 identify >/dev/null
+          brightness=$(convert semplast-site/catalog/model-08.png -colorspace Gray -format '%[fx:mean]' info:)
+          awk -v value="$brightness" 'BEGIN { exit !(value > 0.15) }'
+
+          python3 -m http.server 8765 --directory semplast-site >/tmp/semplast-http.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          sleep 1
+          wget --spider --recursive --level=4 --no-parent --no-verbose http://127.0.0.1:8765/
+          kill "$server_pid"
+          trap - EXIT
+          echo 'Validation passed: 25 pages, 20 product images, and all internal links'
 
       - name: Create preview and Netlify ZIP
         run: |
