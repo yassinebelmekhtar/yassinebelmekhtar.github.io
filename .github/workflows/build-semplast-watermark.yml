@@ -1,0 +1,251 @@
+name: Build SEHIMPLAST watermarked site
+
+on:
+  push:
+    branches:
+      - semplast-watermark
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+
+      - name: Install image tools
+        run: sudo apt-get update && sudo apt-get install -y imagemagick wget zip python3-pil
+
+      - name: Download the public website
+        run: |
+          rm -rf semplast-site .site-download
+          mkdir -p semplast-site
+          wget --mirror --page-requisites --convert-links --adjust-extension \
+            --no-parent --execute robots=off \
+            https://semplast.netlify.app/ -P .site-download
+          cp -a .site-download/semplast.netlify.app/. semplast-site/
+          test -f semplast-site/index.html
+          test -f semplast-site/catalog/model-01.webp
+          test -f semplast-assets/sehimplast-logo-watermark.png
+          cp semplast-assets/sehimplast-logo-watermark.png new-logo.png
+          test -f semplast-assets/site-enhancements.js
+          cp semplast-assets/site-enhancements.js semplast-site/site-enhancements.js
+          test -f semplast-assets/model-08-replacement.png
+          cp semplast-assets/model-08-replacement.png semplast-site/catalog/model-08.png
+
+      - name: Apply SEHIMPLAST identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          find semplast-site -type f \( -name '*.html' -o -name '*.js' \) -print0 | xargs -0 sed -i \
+            -e 's/SEMPLAST SARL AU/SEHIMPLAST SARL AU/g' \
+            -e 's#https://www.google.com/maps/search/?api=1&amp;query=5+Boulevard+Abdellah+Ben+Yassine+Casablanca#https://share.google/rnWDULLRXrN5Y6Ynk#g' \
+            -e 's#https://www.google.com/maps/search/?api=1\\u0026query=5+Boulevard+Abdellah+Ben+Yassine+Casablanca#https://share.google/rnWDULLRXrN5Y6Ynk#g' \
+            -e 's/Emballages pour huiles · Casablanca/Emballages pour huiles · Had Soualem/g' \
+            -e 's/RETROUVEZ-NOUS À CASABLANCA/RETROUVEZ-NOUS À HAD SOUALEM/g' \
+            -e 's/depuis Casablanca/depuis Had Soualem/g' \
+            -e 's/Casablanca, Maroc/المغرب/g' \
+            -e 's/5 Boulevard Abdellah Ben Yassine/العسل العالية 2/g' \
+            -e 's/Immeuble Bellaon, 5e étage/حد السوالم/g' \
+            -e 's/5 Bd Abdellah Ben Yassine/العسل العالية 2/g' \
+            -e 's/Imm Bellaon, 5e étage/حد السوالم/g' \
+            -e 's/SEMPLAST/SEHIMPLAST/g' \
+            -e 's/Semplast/Sehimplast/g' \
+            -e 's/CASABLANCA/HAD SOUALEM/g' \
+            -e 's/Casablanca/Had Soualem/g' \
+            -e 's/SEHIMPLAST · Had Soualem, MAROC/SEHIMPLAST SARL AU · HAD SOUALEM, MAROC/g' \
+            -e 's/SEHIMPLAST — Accueil/SEHIMPLAST SARL AU — Accueil/g' \
+            -e 's/<b class="foot-logo">SEHIMPLAST<\/b>/<b class="foot-logo">SEHIMPLAST SARL AU<\/b>/g' \
+            -e 's/© 2026 SEHIMPLAST\./© 2026 SEHIMPLAST SARL AU./g'
+
+          css_file=$(find semplast-site/_next/static/css -type f -name 'index.*.css' | head -n 1)
+          test -n "$css_file"
+          printf '\n%s\n' '.foot-logo{display:block;width:190px;height:auto;max-height:72px;object-fit:contain;background:#fff;border-radius:10px}.intro-logo-shell img,.brand img{object-fit:contain}.footer-map-link{color:#f28c28!important;font-weight:700}.contact-map{display:block;width:100%;min-height:330px;border:0;border-radius:20px;margin:20px 0 14px;box-shadow:0 16px 40px rgba(16,42,67,.16)}@media(max-width:640px){.foot-logo{width:150px;max-height:60px}.contact-map{min-height:260px;border-radius:14px}}' >> "$css_file"
+
+          find semplast-site -maxdepth 1 -type f -name '*.html' -print0 | xargs -0 sed -i \
+            's#<b class="foot-logo">SEHIMPLAST SARL AU<\/b>#<img class="foot-logo" src="semplast-logo.jpeg" alt="SEHIMPLAST SARL AU"/>#g'
+          find semplast-site/products -maxdepth 1 -type f -name '*.html' -print0 | xargs -0 sed -i \
+            's#<b class="foot-logo">SEHIMPLAST SARL AU<\/b>#<img class="foot-logo" src="../semplast-logo.jpeg" alt="SEHIMPLAST SARL AU"/>#g'
+
+          map_anchor='<a class="footer-map-link" href="https://share.google/rnWDULLRXrN5Y6Ynk" target="_blank" rel="noopener noreferrer">الموقع على Google Maps ↗</a>'
+          find semplast-site -type f -name '*.html' -print0 | xargs -0 sed -i \
+            "s#<a href=\"mailto:contact@semplast.com?cc=semlalimohammedlarbi%40gmail.com\">contact@semplast.com</a>#<a href=\"mailto:contact@semplast.com?cc=semlalimohammedlarbi%40gmail.com\">contact@semplast.com</a>$map_anchor#g"
+
+          find semplast-site -maxdepth 1 -type f -name '*.html' -print0 | xargs -0 sed -i \
+            's#</body>#<script src="site-enhancements.js" defer></script></body>#g'
+          find semplast-site/products -maxdepth 1 -type f -name '*.html' -print0 | xargs -0 sed -i \
+            's#</body>#<script src="../site-enhancements.js" defer></script></body>#g'
+
+          chrome_js=$(find semplast-site/_next/static/chunks -type f -name 'site-chrome-*.js' | head -n 1)
+          intro_js=$(find semplast-site/_next/static/chunks -type f -name 'intro-splash-*.js' | head -n 1)
+          test -n "$chrome_js"
+          test -n "$intro_js"
+          sed -i 's#(0,d.jsx)(`b`,{className:`foot-logo`,children:`SEHIMPLAST`})#(0,d.jsx)(`img`,{className:`foot-logo`,src:`/semplast-logo.jpeg`,alt:`SEHIMPLAST SARL AU`})#g' "$chrome_js"
+          sed -i \
+            -e 's/Bienvenue chez SEHIMPLAST/Bienvenue chez SEHIMPLAST SARL AU/g' \
+            -e 's/Logo SEHIMPLAST/Logo SEHIMPLAST SARL AU/g' "$intro_js"
+
+          find semplast-site -type f -name '*.html' -print0 | xargs -0 sed -i -E \
+            -e 's#<meta name="codex-preview" content="development"/>##g' \
+            -e 's#<script async src="[^"]*\.netlify/scripts/hud(%3F|\?)[^"]*"[^>]*></script>##g'
+          rm -rf semplast-site/.netlify
+
+          printf '%s\n' \
+            'User-agent: *' \
+            'Allow: /' \
+            'Sitemap: https://semplast.netlify.app/sitemap.xml' \
+            > semplast-site/robots.txt
+
+          {
+            printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>' '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+            printf '%s\n' '  <url><loc>https://semplast.netlify.app/</loc></url>'
+            for page in about contact legal products; do
+              printf '  <url><loc>https://semplast.netlify.app/%s</loc></url>\n' "$page"
+            done
+            for page in $(seq 1 20); do
+              printf '  <url><loc>https://semplast.netlify.app/products/%s</loc></url>\n' "$page"
+            done
+            printf '%s\n' '</urlset>'
+          } > semplast-site/sitemap.xml
+
+          printf '%s\n' \
+            '/index.html / 301' \
+            '/about /about.html 200' \
+            '/contact /contact.html 200' \
+            '/legal /legal.html 200' \
+            '/products /products.html 200' \
+            '/products/:id /products/:id.html 200' \
+            > semplast-site/_redirects
+
+          printf '%s\n' \
+            '/*' \
+            '  X-Content-Type-Options: nosniff' \
+            '  Referrer-Policy: strict-origin-when-cross-origin' \
+            '  X-Frame-Options: SAMEORIGIN' \
+            '  Permissions-Policy: camera=(), microphone=(), geolocation=()' \
+            '/_next/static/*' \
+            '  Cache-Control: public, max-age=31536000, immutable' \
+            '/catalog/*' \
+            '  Cache-Control: public, max-age=604800' \
+            > semplast-site/_headers
+
+          printf '%s\n' 'Company identity and production configuration completed'
+
+      - name: Remove old watermarks and add the new professional mark
+        shell: bash
+        run: |
+          set -euo pipefail
+          convert new-logo.png -trim +repage -strip \
+            -channel A -evaluate multiply 0.78 +channel logo-watermark.png
+          convert new-logo.png -background white -alpha remove -alpha off \
+            -resize 540x372 -gravity center -extent 576x408 \
+            -strip -quality 90 semplast-site/semplast-logo.jpeg
+
+          mapfile -t images < <(
+            find semplast-site/catalog -maxdepth 1 -type f \( -iname 'model-*.webp' -o -iname 'model-*.png' -o -iname 'model-*.jpg' -o -iname 'model-*.jpeg' \) -print
+            find semplast-site/products -maxdepth 1 -type f \( -iname '*.webp' -o -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \) -print
+          )
+
+          count=0
+          repaired=0
+          for img in "${images[@]}"; do
+            if ! identify "$img" >/dev/null 2>&1; then
+              python3 -c 'from PIL import Image, ImageFile; from pathlib import Path; import os, sys; ImageFile.LOAD_TRUNCATED_IMAGES=True; p=Path(sys.argv[1]); im=Image.open(p); fmt=im.format or p.suffix.lstrip(".").upper(); im.load(); im=im.convert("RGB") if fmt=="JPEG" else im; t=p.with_name(p.stem+".repaired"+p.suffix); im.save(t, format=fmt); im.close(); os.replace(t, p)' "$img"
+              repaired=$((repaired + 1))
+            fi
+
+            identify "$img" >/dev/null
+            width=$(identify -format '%w' "$img")
+            height=$(identify -format '%h' "$img")
+            clean_width=$(( width * 34 / 100 ))
+            clean_height=$(( height * 21 / 100 ))
+            clean_y=$(( height - clean_height ))
+            mark_width=$(( width * 18 / 100 ))
+            margin=$(( width * 22 / 1000 ))
+            [ "$margin" -lt 14 ] && margin=14
+            ext="${img##*.}"
+            cleaned="${img%.*}.cleaned.${ext}"
+            output="${img%.*}.watermarked.${ext}"
+
+            # Rebuild the lower-right background from the symmetric clean side.
+            # This removes the previous logo and its white box before adding the new mark.
+            convert "$img" \
+              \( +clone -crop "${clean_width}x${clean_height}+0+${clean_y}" +repage -flop \) \
+              -gravity southeast -geometry +0+0 -compose over -composite \
+              -strip -quality 92 "$cleaned"
+
+            convert "$cleaned" \
+              \( logo-watermark.png -resize "${mark_width}x" \) \
+              -gravity southeast -geometry "+${margin}+${margin}" -compose over -composite \
+              -strip -quality 92 "$output"
+            mv "$output" "$img"
+            rm -f "$cleaned"
+            count=$((count + 1))
+          done
+
+          echo "Cleaned old marks and added the new watermark to $count product images; repaired $repaired source images"
+          test "$count" -ge 20
+
+      - name: Validate every page, image, and internal link
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(find semplast-site -type f -name '*.html' | wc -l)" -eq 25
+          test "$(find semplast-site/catalog -maxdepth 1 -type f -name 'model-*' | wc -l)" -eq 20
+          grep -R -q 'SEHIMPLAST SARL AU' semplast-site
+          grep -R -q 'العسل العالية 2' semplast-site
+          grep -R -q 'https://share.google/rnWDULLRXrN5Y6Ynk' semplast-site
+          grep -R -q 'contact-map' semplast-site/site-enhancements.js
+          grep -R -q 'العسل العالية 2، حد السوالم' semplast-site/site-enhancements.js
+          ! grep -R -E -q 'Casablanca|Abdellah Ben Yassine|Bellaon' semplast-site
+          ! grep -R -q '.netlify/scripts/hud' semplast-site
+          ! grep -R -q 'name="codex-preview"' semplast-site
+          test -s semplast-site/robots.txt
+          test -s semplast-site/sitemap.xml
+          test -s semplast-site/_redirects
+          test -s semplast-site/_headers
+          find semplast-site/catalog -maxdepth 1 -type f -name 'model-*' -print0 | xargs -0 -n 1 identify >/dev/null
+          brightness=$(convert semplast-site/catalog/model-08.png -colorspace Gray -format '%[fx:mean]' info:)
+          awk -v value="$brightness" 'BEGIN { exit !(value > 0.15) }'
+
+          python3 -m http.server 8765 --directory semplast-site >/tmp/semplast-http.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          sleep 1
+          wget --spider --recursive --level=4 --no-parent --no-verbose http://127.0.0.1:8765/
+          kill "$server_pid"
+          trap - EXIT
+          echo 'Validation passed: 25 pages, 20 product images, and all internal links'
+
+      - name: Create preview and Netlify ZIP
+        run: |
+          montage semplast-site/catalog/model-* \
+            -thumbnail 180x180 -tile 5x4 -geometry +8+8 \
+            -background '#eef3f4' -quality 82 watermark-preview.jpg
+          (
+            cd semplast-site
+            zip -qr ../sehimplast-netlify-watermark.zip .
+          )
+          unzip -tq sehimplast-netlify-watermark.zip
+          test "$(unzip -Z1 sehimplast-netlify-watermark.zip | head -n 1)" != "semplast-site/"
+
+          rm -rf semplast-preview
+          cp -a semplast-site semplast-preview
+          preview_base='https://raw.githack.com/yassinebelmekhtar/yassinebelmekhtar.github.io/semplast-watermark/semplast-preview/'
+          find semplast-preview -type f \( -name '*.html' -o -name '*.js' -o -name '*.css' \) -print0 | xargs -0 sed -i \
+            -e "s#\"/#\"$preview_base#g" \
+            -e "s#'/#'$preview_base#g" \
+            -e "s#\`/#\`$preview_base#g"
+          test -f semplast-preview/index.html
+
+      - name: Save generated files on the branch
+        run: |
+          git config user.name "SEHIMPLAST Site Builder"
+          git config user.email "actions@users.noreply.github.com"
+          git add semplast-site semplast-preview watermark-preview.jpg sehimplast-netlify-watermark.zip
+          git commit -m "Add SEHIMPLAST watermark to all product images"
+          git push origin semplast-watermark
