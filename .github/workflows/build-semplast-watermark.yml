@@ -32,6 +32,8 @@ jobs:
           test -f semplast-site/catalog/model-01.webp
           test -f semplast-assets/sehimplast-logo-watermark.png
           cp semplast-assets/sehimplast-logo-watermark.png new-logo.png
+          test -f semplast-assets/site-enhancements.js
+          cp semplast-assets/site-enhancements.js semplast-site/site-enhancements.js
           test -f semplast-assets/model-08-replacement.png
           cp semplast-assets/model-08-replacement.png semplast-site/catalog/model-08.png
 
@@ -62,12 +64,21 @@ jobs:
 
           css_file=$(find semplast-site/_next/static/css -type f -name 'index.*.css' | head -n 1)
           test -n "$css_file"
-          printf '\n%s\n' '.foot-logo{display:block;width:190px;height:auto;max-height:72px;object-fit:contain;background:#fff;border-radius:10px}.intro-logo-shell img,.brand img{object-fit:contain}@media(max-width:640px){.foot-logo{width:150px;max-height:60px}}' >> "$css_file"
+          printf '\n%s\n' '.foot-logo{display:block;width:190px;height:auto;max-height:72px;object-fit:contain;background:#fff;border-radius:10px}.intro-logo-shell img,.brand img{object-fit:contain}.footer-map-link{color:#f28c28!important;font-weight:700}.contact-map{display:block;width:100%;min-height:330px;border:0;border-radius:20px;margin:20px 0 14px;box-shadow:0 16px 40px rgba(16,42,67,.16)}@media(max-width:640px){.foot-logo{width:150px;max-height:60px}.contact-map{min-height:260px;border-radius:14px}}' >> "$css_file"
 
           find semplast-site -maxdepth 1 -type f -name '*.html' -print0 | xargs -0 sed -i \
             's#<b class="foot-logo">SEHIMPLAST SARL AU<\/b>#<img class="foot-logo" src="semplast-logo.jpeg" alt="SEHIMPLAST SARL AU"/>#g'
           find semplast-site/products -maxdepth 1 -type f -name '*.html' -print0 | xargs -0 sed -i \
             's#<b class="foot-logo">SEHIMPLAST SARL AU<\/b>#<img class="foot-logo" src="../semplast-logo.jpeg" alt="SEHIMPLAST SARL AU"/>#g'
+
+          map_anchor='<a class="footer-map-link" href="https://share.google/rnWDULLRXrN5Y6Ynk" target="_blank" rel="noopener noreferrer">الموقع على Google Maps ↗</a>'
+          find semplast-site -type f -name '*.html' -print0 | xargs -0 sed -i \
+            "s#<a href=\"mailto:contact@semplast.com?cc=semlalimohammedlarbi%40gmail.com\">contact@semplast.com</a>#<a href=\"mailto:contact@semplast.com?cc=semlalimohammedlarbi%40gmail.com\">contact@semplast.com</a>$map_anchor#g"
+
+          find semplast-site -maxdepth 1 -type f -name '*.html' -print0 | xargs -0 sed -i \
+            's#</body>#<script src="site-enhancements.js" defer></script></body>#g'
+          find semplast-site/products -maxdepth 1 -type f -name '*.html' -print0 | xargs -0 sed -i \
+            's#</body>#<script src="../site-enhancements.js" defer></script></body>#g'
 
           chrome_js=$(find semplast-site/_next/static/chunks -type f -name 'site-chrome-*.js' | head -n 1)
           intro_js=$(find semplast-site/_next/static/chunks -type f -name 'intro-splash-*.js' | head -n 1)
@@ -124,11 +135,12 @@ jobs:
 
           printf '%s\n' 'Company identity and production configuration completed'
 
-      - name: Replace product watermarks
+      - name: Remove old watermarks and add the new professional mark
         shell: bash
         run: |
           set -euo pipefail
-          convert new-logo.png -trim +repage -strip logo-trimmed.png
+          convert new-logo.png -trim +repage -strip \
+            -channel A -evaluate multiply 0.78 +channel logo-watermark.png
           convert new-logo.png -background white -alpha remove -alpha off \
             -resize 540x372 -gravity center -extent 576x408 \
             -strip -quality 90 semplast-site/semplast-logo.jpeg
@@ -148,23 +160,34 @@ jobs:
 
             identify "$img" >/dev/null
             width=$(identify -format '%w' "$img")
-            mark_width=$(( width * 24 / 100 ))
-            pad=$(( width * 12 / 1000 ))
-            margin=$(( width * 24 / 1000 ))
-            [ "$pad" -lt 8 ] && pad=8
+            height=$(identify -format '%h' "$img")
+            clean_width=$(( width * 34 / 100 ))
+            clean_height=$(( height * 21 / 100 ))
+            clean_y=$(( height - clean_height ))
+            mark_width=$(( width * 18 / 100 ))
+            margin=$(( width * 22 / 1000 ))
             [ "$margin" -lt 14 ] && margin=14
             ext="${img##*.}"
-            tmp="${img%.*}.watermarked.${ext}"
+            cleaned="${img%.*}.cleaned.${ext}"
+            output="${img%.*}.watermarked.${ext}"
 
+            # Rebuild the lower-right background from the symmetric clean side.
+            # This removes the previous logo and its white box before adding the new mark.
             convert "$img" \
-              \( logo-trimmed.png -resize "${mark_width}x" -bordercolor white -border "$pad" \) \
-              -gravity southeast -geometry "+${margin}+${margin}" -composite \
-              -strip -quality 88 "$tmp"
-            mv "$tmp" "$img"
+              \( +clone -crop "${clean_width}x${clean_height}+0+${clean_y}" +repage -flop \) \
+              -gravity southeast -geometry +0+0 -compose over -composite \
+              -strip -quality 92 "$cleaned"
+
+            convert "$cleaned" \
+              \( logo-watermark.png -resize "${mark_width}x" \) \
+              -gravity southeast -geometry "+${margin}+${margin}" -compose over -composite \
+              -strip -quality 92 "$output"
+            mv "$output" "$img"
+            rm -f "$cleaned"
             count=$((count + 1))
           done
 
-          echo "Updated $count product images; repaired $repaired source images"
+          echo "Cleaned old marks and added the new watermark to $count product images; repaired $repaired source images"
           test "$count" -ge 20
 
       - name: Validate every page, image, and internal link
@@ -176,6 +199,8 @@ jobs:
           grep -R -q 'SEHIMPLAST SARL AU' semplast-site
           grep -R -q 'العسل العالية 2' semplast-site
           grep -R -q 'https://share.google/rnWDULLRXrN5Y6Ynk' semplast-site
+          grep -R -q 'contact-map' semplast-site/site-enhancements.js
+          grep -R -q 'العسل العالية 2، حد السوالم' semplast-site/site-enhancements.js
           ! grep -R -E -q 'Casablanca|Abdellah Ben Yassine|Bellaon' semplast-site
           ! grep -R -q '.netlify/scripts/hud' semplast-site
           ! grep -R -q 'name="codex-preview"' semplast-site
